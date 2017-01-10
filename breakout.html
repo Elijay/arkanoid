@@ -1,0 +1,558 @@
+<!doctype html>
+<html>
+<head>
+  <style>
+      .wrapper{position:relative; width:500px; height:636px; border:3px solid #000;margin:10px auto;}
+      #notificationCanvas, #myCanvas, #backgroundCanvas{position:absolute; top:36px; left:0;}
+      #statusCanvas{position:absolute; top:0; left:0; border-bottom: 1px solid #202020;}
+      #notificationCanvas{z-index:10;}
+      #statusCanvas{z-index: 5;}
+      #myCanvas{z-index:5;}
+  </style>
+</head>
+<body>
+   <div class="wrapper">
+      <canvas id="statusCanvas" width="500" height="36px">
+      </canvas>
+      <canvas id="notificationCanvas" width="500" height="600">
+      </canvas>
+      <canvas id="myCanvas" width="500" height="600">
+      </canvas>
+      <canvas id="backgroundCanvas" width = "500" height="600">
+      </canvas>
+   </div>
+   <script>
+
+function Ball(x, y, color, radius, speed, directionX, directionY){
+  this.startX = x;
+  this.startY = y;
+  this.x = x;
+  this.y = y;
+  this.color = color;
+  this.radius = radius;
+  this.speed = speed;
+  this.directionX = directionX;
+  this.directionY = directionY;
+}
+
+Ball.prototype = {
+  constructor: Ball,
+  moveBall : function(){
+    this.x = this.x + (this.directionX * this.speed);
+    this.y = this.y + (this.directionY * this.speed);
+  },
+  bounceX : function(){
+    this.directionX = this.directionX * -1;
+  },
+  bounceY : function(){
+    this.directionY = this.directionY * -1;
+  },
+  isOffScreen : function(){
+    if (this.y > canvas.height + this.radius || this.y < -1 * this.radius  || this.x > canvas.width + this.radius || this.x < -1 * this.radius){
+      return true;
+    } else{
+      return false;
+    }
+  },
+  reset : function(){
+    this.x = this.startX;
+    this.y = this.startY;
+  }
+};
+
+function RectangularItem(x, y, width, height){
+  this.startX = x;
+  this.startY = y;
+  this.x = x;
+  this.y = y;
+  this.width = width;
+  this.height = height;
+}
+
+RectangularItem.prototype = {
+   constructor: RectangularItem,
+   ballIsTouchingTop : function(ball){
+      if (ball.y < this.y && ball.y >= this.y - ball.radius && ball.x >= this.x && ball.x <= this.x + this.width && ball.directionY == 1){
+        return true;
+      } else {
+        return false;
+      }
+    },
+
+    ballIsTouchingBottom : function(ball){
+      if (ball.y <= this.y + this.height + ball.radius && ball.y > this.y + this.height && ball.x >= this.x && ball.x <= this.x + this.width && ball.directionY == -1){
+        return true;
+      } else {
+        return false;
+      }
+    },
+
+    ballIsTouchingSide : function(ball){
+      if((ball.y > this.y && ball.y <= this.y + this.height && ball.x >= this.x - ball.radius && ball.x < this.x) ||
+        (ball.y > this.y && ball.y <= this.y + this.height && ball.x <= this.x + this.width + ball.radius && ball.x > this.x + this.width)){
+        return true;
+      } else {
+        return false;
+      }
+    },
+
+    ballIsTouchingCorner : function(ball){
+      if ((ball.y >= this.y - ball.radius && ball.y <= this.y && ball.x >= this.x - ball.radius && ball.x <= this.x && ball.directionY == 1 && ball.directionX == 1) ||
+          (ball.y >= this.y + this.height && ball.y <= this.y + this.height + ball.radius && ball.x >= this.x - ball.radius && ball.x <= this.x && ball.directionY == -1 && ball.directionX == 1) ||
+          (ball.y >= this.y - ball.radius && ball.y <= this.y && ball.x >= this.x + this.width && ball.x <= this.x + this.width + ball.radius && ball.directionY == 1 && ball.directionX == -1) ||
+          (ball.y >= this.y + this.height && ball.y <= this.y + this.height + ball.radius && ball.x >= this.x + this.width && ball.x <= this.x + this.width + ball.radius && ball.directionY == -1 && ball.directionX == -1)
+      ){
+        return true;
+      } else {
+        return false;
+      }
+    },
+
+    reset : function(){
+      this.x = this.startX;
+      this.y = this.startY;
+    }
+};
+
+function Bat(x, y, color, width, height, speed){
+  RectangularItem.call(this, x, y, width, height);
+
+  this.color = color;
+  this.speed = speed;
+}
+
+Bat.prototype = new RectangularItem();
+
+function Block(x, y, width, height, visible){
+  RectangularItem.call(this, x, y, width, height);
+
+  this.isVisible = visible;
+}
+
+Block.prototype = new RectangularItem();
+
+function Blocks(x, y, rows, width, height, gutter, pattern){
+  this.x = x;
+  this.y = y;
+  this.width = width;
+  this.height = height;
+  this.rows = rows;
+  this.gutter = gutter;
+  this.pattern = pattern;
+  this.arr = [];
+
+  this.resetBlocks();
+
+}
+
+Blocks.prototype = (function(){
+
+    var createBlockPattern = function(){
+      // copy pattern as needed for # rows required
+      var repeat = Math.ceil(this.rows / this.pattern.length);
+      for (var j = 0; j < repeat; j++){
+        this.pattern.push(this.pattern[j]);
+      }
+      this.pattern.splice(this.rows,1000);
+      // for each row copy columns as required
+      var fullPattern = [];
+      for(var i = 0; i < this.pattern.length; i++){
+        var item = createArrayFromTemplate(this.pattern[i], 9);
+        fullPattern.push(item);
+      }
+      return fullPattern;
+    };
+
+    var createArrayFromTemplate = function(template, n){
+    // determine how many repeats needed to cover n items
+      var repeat = Math.ceil(n / template.length);
+      var arr = [];
+      for (var k = 0; k < repeat; k++){
+        arr.push.apply(arr, template);
+      }
+      return arr.slice(0,n);
+    };
+
+    var getBlockArray = function(arr){
+      var rows = arr.length;
+      var intY = this.y;
+      var blockArray = [];
+      for(var j = 0; j < rows; j++){
+         var intX = this.x;
+         for(var i = 0; i < 9; i++){
+           blockArray.push(new Block(intX, intY, this.width, this.height, Boolean(arr[j][i])));
+           intX += this.gutter + this.width;
+         }
+         intY += this.gutter + this.height;
+      }
+      return blockArray;
+    };
+
+    return {
+      constructor: Blocks,
+      getVisibleBlocks : function(){
+        return this.arr.filter(x => x.isVisible);
+      },
+      resetBlocks : function(){
+        this.arr = getBlockArray.call(this, createBlockPattern.call(this));
+      }
+    }
+
+})();
+
+function Level(level, rows, blocks){
+  this.rows = rows;
+  this.blockTemplate = blocks;
+  this.level = level;
+  this.blocks;
+}
+
+Level.prototype = {
+  constructor: Level,
+  getBlocks : function(){
+    if (this.blocks){
+      return this.blocks;
+    } else {
+      this.blocks = new Blocks(25, 60, this.rows, 40, 20, 10, this.blockTemplate);
+      return this.blocks;
+    }
+  },
+  setBlocks : function(arr){
+    this.blocks.arr = arr;
+  }
+}
+
+function Levels(levels){
+  this.levels = levels;
+  this.currentLevel = 1;
+}
+
+Levels.prototype = {
+  constructor: Levels,
+  getCurrentLevel : function(){
+    return this.levels.find(x => x.level === this.currentLevel);
+  },
+  incrementLevel : function(){
+    this.currentLevel = this.currentLevel + 1;
+  },
+  reset : function(){
+    this.currentLevel = 1;
+    this.levels.forEach(function(element){
+      if (element.blocks){
+        element.blocks.resetBlocks()}
+      });
+    }
+
+}
+
+   function keyPressed(e){
+
+       // keys A and D control bat movement
+     var keyD = e.keyCode;
+
+     if (runGame != null){
+       if (keyD == 68 && bat.x <= canvas.width - bat.speed - bat.width){
+         bat.x = bat.x + bat.speed;
+         refreshCanvas(levels.getCurrentLevel().getBlocks(), score, bat, ball);
+       } else if (keyD == 65 && bat.x >= bat.speed){
+         bat.x = bat.x - bat.speed;
+         refreshCanvas(levels.getCurrentLevel().getBlocks(), score, bat, ball);
+       }
+     } else {
+         if (keyD == 32){
+          hideNotification();
+          runGame = setInterval(screenThread, 16);
+         }
+     }
+   }
+
+   function clearCanvas(canvas, context){
+     context.clearRect(0, 0, canvas.width, canvas.height);
+   }
+
+   // helper functions
+   function setDrawColor(context, color){
+     context.fillStyle = color;
+   }
+
+   function getCentredTextX(text, canvas, context){
+     var textWidth = context.measureText(text).width;
+     return canvas.width/2 - Math.round(textWidth/2);
+   }
+
+   // notification layer
+   function showNotification(message){
+     notifContext.font = "12px Verdana";
+       var height = 70;
+       if (message.length > 1){
+         var height = 182;
+       }
+       var textWidth = notifContext.measureText(message[0]).width;
+       var textStart = getCentredTextX(message[0], notifCanvas, notifContext);
+       setDrawColor(notifContext, "#404040");
+       notifContext.textAlign = "center";
+       notifContext.fillRect(textStart - 40, 210, textWidth + 80, height);
+       setDrawColor(notifContext, "#fff");
+       //notifContext.fillText(message,textStart,250);
+       notifContext.fillText(message[0].toUpperCase(),250, 250);
+
+    if (message.length > 1){
+      // there is also an image to render
+      drawImage(notifContext, message[1], 218, 290)
+    }
+   }
+
+   function hideNotification(){
+     clearCanvas(notifCanvas, notifContext);
+   }
+
+   function showCountdown(message, time){
+     notifContext.font = "14px Verdana";
+     setDrawColor(notifContext, "#000");
+     notifContext.textAlign = "center";
+     notifContext.fillText(message, 250, 200);
+     notifContext.font = "75px Verdana";
+     notifContext.lineWidth = 3;
+     notifContext.strokeText(time, 250, 280);
+   }
+
+   function drawStatusCanvas(){
+     statusContext.font = "14px Verdana";
+     statusContext.textBaseline = "middle";
+     setDrawColor(statusContext, "#404040");
+     statusContext.fillRect(0,0,500,statusCanvas.height);
+   }
+
+   function drawLevel(level){
+     statusContext.textAlign = "left";
+     setDrawColor(statusContext, "#ffffff");
+     var txtLevel = "Level: " + level;
+     statusContext.fillText(txtLevel, 10, 15);
+   }
+
+   function drawLives(lives){
+     setDrawColor(statusContext, "#ffffff");
+     var x = canvas.width - 34;
+
+     for(var i = 0; i < lives; i++){
+       drawImage(statusContext,"file:///C:/breakout/images/heart-plus.png",x, 2);
+       x = x - 34;
+     }
+   }
+
+   function drawImage(context,src, x, y){
+     var image = new Image();
+     image.onload = function(){
+       context.drawImage(image, x, y);
+     }
+     image.src = src;
+   }
+
+   function createPattern(canvas, context, src, repeat){
+     var image = new Image();
+     image.src = src;
+     image.onload = function(){
+       var fillPattern = context.createPattern(image, repeat);
+       context.fillStyle = fillPattern;
+       context.fillRect(0, 0, canvas.width, canvas.height);
+     }
+     //image.src = src;
+   }
+
+   function drawScore(score){
+     statusContext.textAlign = "center";
+     setDrawColor(statusContext, "#ffffff");
+     statusContext.fillText(score,250,15);
+   }
+
+   function drawBall(ball){
+    context.beginPath();
+    context.arc(ball.x, ball.y, ball.radius, 0, 2*Math.PI);
+    setDrawColor(context, "blue");
+    context.fill();
+   }
+
+   function drawBat(bat){
+     setDrawColor(context, "#404040");
+     context.fillRect(bat.x, bat.y, bat.width, bat.height);
+   }
+
+   function drawBlocks(arrBlocks){
+     setDrawColor(context, "#808080");
+     arrBlocks.forEach(drawBlock);
+   }
+
+   function drawBlock(element, index, array){
+     context.fillRect(element.x, element.y, element.width, element.height);
+   }
+
+   function refreshCanvas(blocks, score, bat, ball){
+     //main canvas
+     clearCanvas(canvas, context);
+     drawBlocks(blocks.getVisibleBlocks());
+     drawBall(ball);
+     drawBat(bat);
+
+     //status canvas
+     clearCanvas(statusCanvas, statusContext);
+     drawStatusCanvas();
+     drawScore(score);
+     drawLevel(levels.currentLevel);
+     drawLives(lives);
+   }
+
+   function screenThread(){
+          checkCollision();
+
+          // lost a life or game over
+          if (ball.isOffScreen()){
+            clearInterval(runGame);
+            runGame = null;
+            lives--;
+            if (lives >= 0){
+              continueGame();
+            } else{
+              startGame();
+            }
+          }
+
+          // level completed
+          if (levels.getCurrentLevel().getBlocks().getVisibleBlocks().length === 0){
+            ball.reset();
+            bat.reset();
+            levels.incrementLevel();
+            newLevelCountdown = 180;
+            // completed game
+            if (levels.getCurrentLevel() === undefined){
+              clearInterval(runGame);
+              showNotification('You win!');
+            }
+          }
+
+          refreshCanvas(levels.getCurrentLevel().getBlocks(), score, bat, ball);
+
+          if (newLevelCountdown === 0){
+            ball.moveBall();
+          } else if (newLevelCountdown === 1) {
+            hideNotification();
+            newLevelCountdown--;
+          } else{
+            var timer = Math.ceil(newLevelCountdown / 60);
+            hideNotification();
+            showCountdown("Next level starting in ", timer);
+            newLevelCountdown--;
+          }
+
+   }
+
+   function blockCollision(blocks){
+   // checks for collision on each block and updates the block array if collision occurs
+      return blocks.arr.map(function(b){
+        var elem = new Block(b.x, b.y, b.width, b.height, b.isVisible);
+
+        if (elem.isVisible){
+          //block is currently visible
+
+          if (elem.ballIsTouchingTop(ball)){
+            elem.isVisible = false;
+            ball.bounceY();
+            score += 10;
+          } else if (elem.ballIsTouchingBottom(ball)){
+            elem.isVisible = false;
+            ball.bounceY();
+            score += 10;
+          } else if (elem.ballIsTouchingSide(ball)){
+            elem.isVisible = false;
+            ball.bounceX();
+            score += 10;
+          } else if (elem.ballIsTouchingCorner(ball)){
+            elem.isVisible = false;
+            ball.bounceX();
+            ball.bounceY();
+            score += 10;
+          } else{
+            //missed this block - still visible
+            elem.isVisible = true;
+          }
+        } else {
+          //block is still hidden
+          elem.isVisible = false;
+        }
+        return elem;
+     });
+   }
+
+   function checkCollision(){
+     if (ball.y <= ball.radius && (ball.x >= (canvas.width - ball.radius) || ball.x <= ball.radius)){
+          // ball hits corner of canvas - special case to fix stuck-at-the-top bug
+          ball.bounceY();
+          ball.bounceX();
+     } else if (ball.y <= ball.radius){
+          //ball hits top of canvas
+          ball.bounceY();
+     } else if (ball.x >= (canvas.width - ball.radius) || ball.x <= ball.radius){
+          //ball hits sides of canvas
+          ball.bounceX();
+     } else if (bat.ballIsTouchingTop(ball)){
+          //next three states relate to ball hitting the bat
+          ball.bounceY();
+     } else if (bat.ballIsTouchingSide(ball)){
+          ball.bounceX();
+     } else if (bat.ballIsTouchingCorner(ball)){
+          ball.bounceX();
+          ball.bounceY();
+     } else {
+       //check if ball is hitting blocks
+       //levels.getCurrentLevel().getBlocks().arr = blockCollision(levels.getCurrentLevel().getBlocks());
+       levels.getCurrentLevel().setBlocks(blockCollision(levels.getCurrentLevel().getBlocks()));
+     }
+   }
+
+   function continueGame(){
+     bat.reset();
+     ball.reset();
+     hideNotification();
+     startSetup(["Press spacebar to continue."]);
+   }
+
+   function startGame(){
+     bat.reset();
+     ball.reset();
+     levels.reset();
+     score = 0;
+     lives = initLives;
+     startSetup(["Game over. Press spacebar to play again.","file:///C:/breakout/images/dead-head.png"]);
+   }
+
+   function startSetup(msg){
+     refreshCanvas(levels.getCurrentLevel().getBlocks(), score, bat, ball);
+     showNotification(msg);
+   }
+
+   var bgCanvas = document.getElementById("backgroundCanvas"),
+   bgContext = bgCanvas.getContext("2d"),
+   canvas = document.getElementById("myCanvas"),
+   context = canvas.getContext("2d"),
+   notifCanvas = document.getElementById("notificationCanvas"),
+   notifContext = notifCanvas.getContext("2d"),
+   statusCanvas = document.getElementById("statusCanvas"),
+   statusContext = statusCanvas.getContext("2d"),
+   ball = new Ball(250, 560, "black", 10, 5, 1, -1),
+   bat = new Bat(210, 570, "black", 80, 20, 12),
+   score = 0,
+   runGame = null,
+   newLevelCountdown = 0,
+   levels = new Levels([new Level(1, 3, [[1,0],[0,1],[1,0]]), new Level(2, 3, [[1]])]),
+   initLives = 3;
+   lives = initLives;
+
+   //call on document not on canvas
+   document.addEventListener("keydown", keyPressed, false);
+
+   createPattern(bgCanvas, bgContext, "file:///C:/breakout/images/eight_horns.png","repeat");
+
+   startSetup(["Press spacebar to start"]);
+
+   </script>
+</body>
+</html>
