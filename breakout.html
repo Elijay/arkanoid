@@ -2,11 +2,11 @@
 <html>
 <head>
   <style>
-      .wrapper{position:relative; width:500px; height:636px; border:3px solid #000;margin:10px auto;}
+      .wrapper{position:relative; width:500px; height:636px; border:3px solid #000; margin:10px auto;}
       #notificationCanvas, #myCanvas, #backgroundCanvas{position:absolute; top:36px; left:0;}
       #statusCanvas{position:absolute; top:0; left:0; border-bottom: 1px solid #202020;}
       #notificationCanvas{z-index:10;}
-      #statusCanvas{z-index: 5;}
+      #statusCanvas{z-index:5;}
       #myCanvas{z-index:5;}
   </style>
 </head>
@@ -123,10 +123,10 @@ function Bat(x, y, color, width, height, speed){
 
 Bat.prototype = new RectangularItem();
 
-function Block(x, y, width, height, visible){
+function Block(x, y, width, height, visible, powerUp){
   RectangularItem.call(this, x, y, width, height);
-
   this.isVisible = visible;
+  this.powerUp = powerUp;
 }
 
 Block.prototype = new RectangularItem();
@@ -173,6 +173,16 @@ Blocks.prototype = (function(){
       return arr.slice(0,n);
     };
 
+    var hasPowerUp = function(i){
+      //returns true with probability of 1 / i
+      var rand = Math.floor(Math.random() * (i + 1));
+      if (rand == 1){
+        return true;
+      } else {
+        return false;
+      }
+    };
+
     var getBlockArray = function(arr){
       var rows = arr.length;
       var intY = this.y;
@@ -180,12 +190,13 @@ Blocks.prototype = (function(){
       for(var j = 0; j < rows; j++){
          var intX = this.x;
          for(var i = 0; i < 9; i++){
-           blockArray.push(new Block(intX, intY, this.width, this.height, Boolean(arr[j][i])));
+           blockArray.push(new Block(intX, intY, this.width, this.height, Boolean(arr[j][i]), hasPowerUp(5)));
            intX += this.gutter + this.width;
          }
          intY += this.gutter + this.height;
       }
       return blockArray;
+
     };
 
     return {
@@ -245,6 +256,20 @@ Levels.prototype = {
 
 }
 
+function PowerUp(x, y, bonusType, speed) {
+  this.x = x;
+  this.y = y;
+  this.bonusType = bonusType;
+  this.speed = speed;
+}
+
+PowerUp.prototype = {
+  constuctor : PowerUp,
+  drop : function(){
+    this.y = this.y + this.speed;
+  }
+}
+
    function keyPressed(e){
 
        // keys A and D control bat movement
@@ -293,7 +318,6 @@ Levels.prototype = {
        notifContext.textAlign = "center";
        notifContext.fillRect(textStart - 40, 210, textWidth + 80, height);
        setDrawColor(notifContext, "#fff");
-       //notifContext.fillText(message,textStart,250);
        notifContext.fillText(message[0].toUpperCase(),250, 250);
 
     if (message.length > 1){
@@ -335,7 +359,7 @@ Levels.prototype = {
      var x = canvas.width - 34;
 
      for(var i = 0; i < lives; i++){
-       drawImage(statusContext,"file:///C:/breakout/images/heart-plus.png",x, 2);
+       drawImage(statusContext,"./images/heart-plus.png",x, 2);
        x = x - 34;
      }
    }
@@ -378,12 +402,21 @@ Levels.prototype = {
    }
 
    function drawBlocks(arrBlocks){
-     setDrawColor(context, "#808080");
      arrBlocks.forEach(drawBlock);
    }
 
    function drawBlock(element, index, array){
+     if (element.powerUp === true){
+       setDrawColor(context, "red");
+     } else {
+       setDrawColor(context, "#808080");
+     }
      context.fillRect(element.x, element.y, element.width, element.height);
+   }
+
+   function drawPowerUp(powerUp){
+     setDrawColor(context, "orange");
+     context.fillRect(powerUp.x, powerUp.y, 20, 15);
    }
 
    function refreshCanvas(blocks, score, bat, ball){
@@ -392,6 +425,9 @@ Levels.prototype = {
      drawBlocks(blocks.getVisibleBlocks());
      drawBall(ball);
      drawBat(bat);
+     powerUps.forEach(function(element){
+       drawPowerUp(element)
+     });
 
      //status canvas
      clearCanvas(statusCanvas, statusContext);
@@ -433,6 +469,13 @@ Levels.prototype = {
 
           if (newLevelCountdown === 0){
             ball.moveBall();
+            if (powerUps.length > 0){
+              powerUps.forEach(
+                function(element){
+                  element.drop();
+                }
+              )
+            }
           } else if (newLevelCountdown === 1) {
             hideNotification();
             newLevelCountdown--;
@@ -448,24 +491,28 @@ Levels.prototype = {
    function blockCollision(blocks){
    // checks for collision on each block and updates the block array if collision occurs
       return blocks.arr.map(function(b){
-        var elem = new Block(b.x, b.y, b.width, b.height, b.isVisible);
+        var elem = new Block(b.x, b.y, b.width, b.height, b.isVisible, b.powerUp);
 
         if (elem.isVisible){
           //block is currently visible
-
+          var isHit = false;
           if (elem.ballIsTouchingTop(ball)){
+            isHit = true;
             elem.isVisible = false;
             ball.bounceY();
             score += 10;
           } else if (elem.ballIsTouchingBottom(ball)){
+            isHit = true;
             elem.isVisible = false;
             ball.bounceY();
             score += 10;
           } else if (elem.ballIsTouchingSide(ball)){
+            isHit = true;
             elem.isVisible = false;
             ball.bounceX();
             score += 10;
           } else if (elem.ballIsTouchingCorner(ball)){
+            isHit = true;
             elem.isVisible = false;
             ball.bounceX();
             ball.bounceY();
@@ -473,6 +520,10 @@ Levels.prototype = {
           } else{
             //missed this block - still visible
             elem.isVisible = true;
+          }
+          if (isHit && elem.powerUp == true){
+                'create power up here'
+                powerUps.push(new PowerUp(b.x, b.y, "B", 4));
           }
         } else {
           //block is still hidden
@@ -506,6 +557,16 @@ Levels.prototype = {
        //levels.getCurrentLevel().getBlocks().arr = blockCollision(levels.getCurrentLevel().getBlocks());
        levels.getCurrentLevel().setBlocks(blockCollision(levels.getCurrentLevel().getBlocks()));
      }
+
+     //check if bat collects PowerUp
+     if (powerUps.length > 0){
+       powerUps.forEach(function(element, index, object){
+         if (element.y + 15 >= bat.y && element.x >= bat.x && element.x <= bat.x + bat.width){
+             bat.width = bat.width * 2;
+             object.splice(index, 1);
+         }
+       });
+     }
    }
 
    function continueGame(){
@@ -521,7 +582,7 @@ Levels.prototype = {
      levels.reset();
      score = 0;
      lives = initLives;
-     startSetup(["Game over. Press spacebar to play again.","file:///C:/breakout/images/dead-head.png"]);
+     startSetup(["Game over. Press spacebar to play again.","./images/dead-head.png"]);
    }
 
    function startSetup(msg){
@@ -543,13 +604,14 @@ Levels.prototype = {
    runGame = null,
    newLevelCountdown = 0,
    levels = new Levels([new Level(1, 3, [[1,0],[0,1],[1,0]]), new Level(2, 3, [[1]])]),
-   initLives = 3;
-   lives = initLives;
+   initLives = 3,
+   lives = initLives,
+   powerUps = [];
 
    //call on document not on canvas
    document.addEventListener("keydown", keyPressed, false);
 
-   createPattern(bgCanvas, bgContext, "file:///C:/breakout/images/eight_horns.png","repeat");
+   createPattern(bgCanvas, bgContext, "./images/eight_horns.png","repeat");
 
    startSetup(["Press spacebar to start"]);
 
